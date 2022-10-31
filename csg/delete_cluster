@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+
+set -x #echo on
+
+if (($# != 1))
+then
+  echo "Usage: delete_cluster <base_port>"
+  exit 1
+fi
+
+base_port=$1
+
+for i in 0 1 2 3 4 5
+do
+ p=$((base_port + i))
+ rm -rf $p 
+done

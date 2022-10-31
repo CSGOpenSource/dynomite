@@ -1,0 +1,37 @@
+#!/usr/bin/bash
+
+set -x #echo on
+
+if (($# != 1))
+then
+  echo "Usage: start_cluster <base_port>"
+  exit 1
+fi
+
+base_port=$1
+
+timestamp=`date +"%Y%m%d%H%M%S"`
+cluster_log_file=cluster_$base_port_log_$timestamp.txt
+
+for i in 0 1 2 3 4 5
+do
+  p=$((base_port + i))
+  redis_log_file=redis_$p_$timestamp.txt
+  dyn_log_file=dynomite_$p_$timestamp.txt
+
+  cd $p 
+  rm -rf cluster.conf dump.rdb
+  redis-server redis.conf >> $redis_log_file 2>&1 &
+  sleep 1
+ 
+  ../dynomite -c dynomite.yml >> $dyn_log_file 2>&1 &
+  sleep 1
+
+  cd -
+done
+
+sleep 5 # Wait for nodes to start up
+
+redis-cli -a password --cluster create 127.0.0.1:$base_port 127.0.0.1:$((base_port + 1)) 127.0.0.1:$((base_port + 2)) 127.0.0.1:$((base_port + 3)) 127.0.0.1:$((base_port + 4)) 127.0.0.1:$((base_port + 5)) --cluster-replicas 1 << EOF  >> $cluster_log_file 2>&1
+yes
+EOF

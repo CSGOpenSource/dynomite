@@ -1,0 +1,71 @@
+#!/usr/bin/bash
+
+set -x #echo on
+
+if (($# != 1))
+then
+  echo "Usage: create_cluster <base_port>"
+  exit 1
+fi
+
+dyn_dc=omaha
+
+base_port=$1
+
+for i in 0 1 2 3 4 5
+do
+  redis_port=$((base_port + i))
+  dyn_port=$((base_port + 10 + i))
+  dyn_stats_port=$((base_port + 90 + i))
+  dyn_gossip_port=$((base_port + 100 + i))
+  dyn_rack=rack$base_port
+  dyn_token=$((99990000 + i))
+
+  mkdir -p $redis_port 
+
+  # Build Redis configuration file
+
+  cat << EOF > $redis_port/redis.conf
+port $redis_port
+cluster-enabled yes
+cluster-config-file cluster.conf
+cluster-node-timeout 5000
+pidfile pid
+appendonly yes
+maxclients 500
+protected-mode no
+masterauth password
+requirepass password
+tcp-backlog 100
+user WenningQiu +@all allkeys on >password
+EOF
+
+  # Build Synomite configuration file
+  
+  dyn_seeds=""
+  for k in 0 1 2 3 4 5
+  do
+    if (($k != $i))
+    then 
+      dyn_seeds=$dyn_seeds$'\n'"    - 127.0.0.1:$((base_port + 100 + k)):$dyn_rack:$dyn_dc:$((99990000 + k))"
+    fi
+  done
+
+  cat << EOF > $redis_port/dynomite.yml
+dyn_o_mite:
+    datacenter: $dyn_dc
+    rack: $dyn_rack
+    dyn_listen: 0.0.0.0:$dyn_gossip_port
+    dyn_seed_provider: simple_provider
+    dyn_seeds: $dyn_seeds
+    listen: 0.0.0.0:$dyn_port
+    stats_listen: 0.0.0.0:$dyn_stats_port
+    servers:
+    - 127.0.0.1:$redis_port:1
+    timeout: 30000
+    tokens: '$dyn_token'
+    data_store: 0
+    requirepass: password
+EOF
+
+done
